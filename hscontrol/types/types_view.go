@@ -269,6 +269,11 @@ func (v NodeView) Unhealthy() bool { return v.ж.Unhealthy }
 func (v NodeView) SessionEpoch() uint64 { return v.ж.SessionEpoch }
 func (v NodeView) String() string       { return v.ж.String() }
 
+// vpngw gateway policy accessors.
+func (v NodeView) GatewayProfiles() GatewayProfiles { return v.ж.GatewayProfiles }
+func (v NodeView) GatewayPolicyVersion() uint64     { return v.ж.GatewayPolicyVersion }
+func (v NodeView) GatewayFailMode() string          { return v.ж.GatewayFailMode }
+
 // A compilation failure here means this code must be regenerated, with the command at the top of this file.
 var _NodeViewNeedsRegeneration = Node(struct {
 	ID             NodeID
@@ -293,10 +298,14 @@ var _NodeViewNeedsRegeneration = Node(struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	DeletedAt      *time.Time
-	IsOnline       *bool
-	Unhealthy      bool
-	SessionEpoch   uint64
-}{})
+	IsOnline             *bool
+	Unhealthy            bool
+	SessionEpoch         uint64
+	GatewayProfiles      GatewayProfiles
+	GatewayPolicyVersion uint64
+	GatewayFailMode      string
+}{})'
+
 
 // View returns a read-only view of PreAuthKey.
 func (p *PreAuthKey) View() PreAuthKeyView {

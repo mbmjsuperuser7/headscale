@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -176,6 +177,13 @@ type Node struct {
 	DeletedAt *time.Time
 
 	IsOnline *bool `gorm:"-"`
+
+	// GatewayPolicy fields — populated for nodes tagged tag:gateway.
+	// Embedded in MapResponse.Node.CapMap under CapGatewayPolicy.
+	// Agent applies these as source-based policy routing rules.
+	GatewayProfiles      GatewayProfiles `gorm:"column:gateway_profiles;serializer:json"`
+	GatewayPolicyVersion uint64          `gorm:"column:gateway_policy_version;default:0"`
+	GatewayFailMode      string          `gorm:"column:gateway_fail_mode;default:'open'"`
 
 	// Unhealthy excludes the node from primary route election while
 	// online. Written by the HA prober. Runtime-only.
@@ -1248,6 +1256,19 @@ func (nv NodeView) TailNode(
 	// Policy nodeAttrs overlay the baseline on the self view. Peers
 	// pass nil; their CapMap is replaced downstream by [policyv2.PeerCapMap].
 	maps.Copy(capMap, selfPolicyCaps)
+
+	// vpngw: inject GatewayPolicyCap for nodes tagged tag:gateway.
+	// The agent reads this from CapMap and applies source-based routing.
+	if len(nv.GatewayProfiles()) > 0 {
+		cap := GatewayPolicyCap{
+			Version:  nv.GatewayPolicyVersion(),
+			Profiles: nv.GatewayProfiles(),
+			FailMode: nv.GatewayFailMode(),
+		}
+		if b, err := json.Marshal(cap); err == nil {
+			capMap[tailcfg.NodeCapability(CapGatewayPolicy)] = []tailcfg.RawMessage{tailcfg.RawMessage(b)}
+		}
+	}
 
 	tNode := tailcfg.Node{
 		//nolint:gosec // G115: NodeID values are within int64 range
