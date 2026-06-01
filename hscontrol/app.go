@@ -578,6 +578,8 @@ func (h *Headscale) createRouter(grpcMux *grpcRuntime.ServeMux) *chi.Mux {
 	r.Route("/api", func(r chi.Router) {
 		r.Use(h.httpAuthenticationMiddleware)
 		r.HandleFunc("/v1/*", grpcMux.ServeHTTP)
+		// vpngw: gateway policy REST endpoint (no proto regeneration needed)
+		r.Put("/v1/vpngw/node/{nodeId}/gateway-policy", h.UpdateGatewayPolicyHandler)
 	})
 	// Ping response endpoint: receives HEAD from clients responding
 	// to a [tailcfg.PingRequest]. The unguessable ping ID serves as authentication.

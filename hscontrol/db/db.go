@@ -744,6 +744,38 @@ WHERE expiry IS NOT NULL AND expiry < '1900-01-01';
 				},
 				Rollback: func(db *gorm.DB) error { return nil },
 			},
+			{
+				// vpngw: add gateway policy columns to nodes table.
+				// gateway_profiles:       JSON array of GatewayProfile (subnet→exitnode→security)
+				// gateway_policy_version: monotonic counter, agent echoes in ACK
+				// gateway_fail_mode:      "open" or "closed" on control disconnect
+				ID: "202606011200-vpngw-gateway-policy",
+				Migrate: func(tx *gorm.DB) error {
+					if !tx.Migrator().HasColumn(&types.Node{}, "gateway_profiles") {
+						if err := tx.Exec(`ALTER TABLE nodes ADD COLUMN gateway_profiles TEXT NOT NULL DEFAULT '[]'`).Error; err != nil {
+							return fmt.Errorf("vpngw: add gateway_profiles column: %w", err)
+						}
+					}
+					if !tx.Migrator().HasColumn(&types.Node{}, "gateway_policy_version") {
+						if err := tx.Exec(`ALTER TABLE nodes ADD COLUMN gateway_policy_version INTEGER NOT NULL DEFAULT 0`).Error; err != nil {
+							return fmt.Errorf("vpngw: add gateway_policy_version column: %w", err)
+						}
+					}
+					if !tx.Migrator().HasColumn(&types.Node{}, "gateway_fail_mode") {
+						if err := tx.Exec(`ALTER TABLE nodes ADD COLUMN gateway_fail_mode TEXT NOT NULL DEFAULT 'open'`).Error; err != nil {
+							return fmt.Errorf("vpngw: add gateway_fail_mode column: %w", err)
+						}
+					}
+					return nil
+				},
+				Rollback: func(tx *gorm.DB) error {
+					for _, col := range []string{"gateway_profiles", "gateway_policy_version", "gateway_fail_mode"} {
+						// SQLite does not support DROP COLUMN before 3.35.0 — ignore errors.
+						_ = tx.Exec("ALTER TABLE nodes DROP COLUMN " + col).Error
+					}
+					return nil
+				},
+			},
 		},
 	)
 
