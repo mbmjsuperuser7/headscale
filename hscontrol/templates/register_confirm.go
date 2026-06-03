@@ -6,41 +6,57 @@ import (
 	"github.com/chasefleming/elem-go/styles"
 )
 
-// RegisterConfirmInfo carries the human-readable information shown on
-// the registration confirmation interstitial that an OIDC-authenticated
-// user must explicitly accept before a pending node is registered to
-// their identity. The fields here intentionally include enough device
-// detail (hostname, OS, machine-key fingerprint) for the user to
-// recognise whether the device they are about to claim is in fact
-// theirs.
+// RegisterConfirmInfo carries the information shown on the
+// registration confirmation screen.
+//
+// All fields are pre-filled from IdP claims and device info.
+// The user sees them in an editable form and clicks OK or Cancel.
+// Whatever is in the fields when OK is clicked gets saved —
+// nothing more, nothing less.
+//
+// ProductMode controls field editability and what gets logged:
+//   - Horizon: fields shown for confirmation, saved as-is from IdP.
+//     Name/email come from IdP and are displayed but not re-editable
+//     (enforced by the IdP group membership gate upstream).
+//   - Glue: all fields editable. User may clear any field.
+//     Only non-empty confirmed values are stored.
+//     No session data (IP, last_seen) is written after registration.
 type RegisterConfirmInfo struct {
-	// FormAction is the absolute or relative URL the confirm form
-	// POSTs to. Typically /register/confirm/{auth_id}.
+	// FormAction is the URL the confirm form POSTs to.
 	FormAction string
 
-	// CSRFTokenName is the name of the hidden form field carrying the
-	// CSRF token. The corresponding cookie shares this name.
+	// CSRFTokenName is the hidden field + cookie name for CSRF.
 	CSRFTokenName string
 
-	// CSRFToken is the per-session token that must match the value of
-	// the cookie set by the OIDC callback before the POST is honoured.
+	// CSRFToken is the per-session CSRF token.
 	CSRFToken string
 
-	// User is the OIDC-authenticated identity the device will be
-	// registered to if the user confirms.
-	User string
+	// DisplayName is pre-filled from IdP (name claim).
+	// Editable in Glue. Shown-only in Horizon (IdP is authoritative).
+	DisplayName string
 
-	// Hostname is the hostname the registering tailscaled instance
-	// reported in its [tailcfg.RegisterRequest].
+	// Email is pre-filled from IdP email claim.
+	// Horizon: shown, not editable (IdP authoritative).
+	// Glue: editable, may be cleared — if cleared, not stored.
+	Email string
+
+	// Hostname is pre-filled from the device OS hostname.
+	// Both products: editable. User may change to any value.
+	// What the user confirms is what gets stored.
 	Hostname string
 
-	// OS is the operating system the registering tailscaled reported.
-	// May be the empty string when the client did not send [tailcfg.Hostinfo].
+	// OS is the operating system reported by the device.
+	// Display only, not editable, not stored as a field.
 	OS string
 
-	// MachineKey is the short fingerprint of the registering machine
-	// key. The full key is intentionally not shown.
+	// MachineKey is the short WireGuard public key fingerprint.
+	// Display only — this is the cryptographic identity.
 	MachineKey string
+
+	// ProductMode controls field editability and privacy behaviour.
+	// "horizon": name/email shown but locked (IdP authoritative).
+	// "glue":    all fields editable, email may be cleared.
+	ProductMode string
 }
 
 // RegisterConfirm renders an interstitial page that asks the
@@ -49,15 +65,97 @@ type RegisterConfirmInfo struct {
 // confirmation step a single GET to /register/{auth_id} could
 // silently complete a phishing-style registration when the victim's
 // IdP allows silent SSO.
+// fieldStyle is the shared style for editable registration fields.
+var fieldStyle = styles.Props{
+	styles.Display:      "block",
+	styles.Width:        "100%",
+	styles.Padding:      "0.4rem 0.6rem",
+	styles.MarginTop:    "0.25rem",
+	styles.MarginBottom: "1rem",
+	styles.Border:       "1px solid var(--md-default-fg-color--lighter)",
+	styles.BorderRadius: "4px",
+	styles.FontSize:     "0.95rem",
+	styles.BoxSizing:    "border-box",
+}.ToInline()
+
+// labelStyle is the shared style for field labels.
+var labelStyle = styles.Props{
+	styles.Display:    "block",
+	styles.FontWeight: "600",
+	styles.Color:      "var(--md-default-fg-color--light)",
+	styles.FontSize:   "0.9rem",
+}.ToInline()
+
+// RegisterConfirm renders the editable registration confirmation screen.
+//
+// All fields are pre-filled and editable. OK saves whatever the user
+// confirmed. Cancel aborts with nothing saved.
+//
+// Horizon: name and email fields are pre-filled from IdP and marked
+// readonly — the IdP group gate already validated identity upstream.
+// Glue: all fields editable, email has a "leave blank to omit" hint.
 func RegisterConfirm(info RegisterConfirmInfo) *elem.Element {
-	deviceList := deviceTable(
-		[4][2]string{
-			{"Hostname", info.Hostname},
-			{"OS", displayOrUnknown(info.OS)},
-			{"Machine key", info.MachineKey},
-			{"Registered to", info.User},
-		},
-	)
+	isGlue := info.ProductMode == "glue"
+
+	nameReadonly := attrs.Props{
+		attrs.Type:        "text",
+		attrs.Name:        "display_name",
+		attrs.Value:       info.DisplayName,
+		attrs.Style:       fieldStyle,
+		attrs.Placeholder: "Display name",
+	}
+	if !isGlue {
+		nameReadonly[attrs.ReadOnly] = "true"
+	}
+
+	emailReadonly := attrs.Props{
+		attrs.Type:        "email",
+		attrs.Name:        "email",
+		attrs.Value:       info.Email,
+		attrs.Style:       fieldStyle,
+		attrs.Placeholder: "Email address",
+	}
+	if !isGlue {
+		emailReadonly[attrs.ReadOnly] = "true"
+	}
+
+	var emailHint elem.Node
+	if isGlue {
+		emailHint = elem.P(attrs.Props{
+			attrs.Style: styles.Props{
+				styles.FontSize: "0.82rem",
+				styles.Color:    "var(--md-default-fg-color--light)",
+				styles.Margin:   "-0.75rem 0 1rem",
+			}.ToInline(),
+		}, elem.Text("Optional — leave blank to register anonymously."))
+	} else {
+		emailHint = elem.Text("")
+	}
+
+	privacyNote := elem.P(attrs.Props{
+		attrs.Style: styles.Props{
+			styles.FontSize:       "0.82rem",
+			styles.Color:          "var(--md-default-fg-color--light)",
+			styles.BorderTop:      "1px solid var(--md-default-fg-color--lighter)",
+			styles.PaddingTop:     "0.75rem",
+			styles.MarginTop:      "0.5rem",
+		}.ToInline(),
+	})
+	if isGlue {
+		privacyNote = elem.P(attrs.Props{
+			attrs.Style: styles.Props{
+				styles.FontSize:   "0.82rem",
+				styles.Color:      "var(--md-default-fg-color--light)",
+				styles.BorderTop:  "1px solid var(--md-default-fg-color--lighter)",
+				styles.PaddingTop: "0.75rem",
+				styles.MarginTop:  "0.5rem",
+			}.ToInline(),
+		}, elem.Text(
+			"Glue does not log sessions, source IPs, or traffic. "+
+				"Only the details you confirm above are stored. "+
+				"If you supplied real information, that is all we have.",
+		))
+	}
 
 	form := elem.Form(
 		attrs.Props{
@@ -69,29 +167,97 @@ func RegisterConfirm(info RegisterConfirmInfo) *elem.Element {
 			attrs.Name:  info.CSRFTokenName,
 			attrs.Value: info.CSRFToken,
 		}),
-		elem.Button(
-			attrs.Props{attrs.Type: "submit"},
-			elem.Text("Confirm registration"),
+		elem.Label(attrs.Props{attrs.Style: labelStyle}, elem.Text("Display name")),
+		elem.Input(nameReadonly),
+		elem.Label(attrs.Props{attrs.Style: labelStyle}, elem.Text("Email")),
+		elem.Input(emailReadonly),
+		emailHint,
+		elem.Label(attrs.Props{attrs.Style: labelStyle}, elem.Text("Device hostname")),
+		elem.Input(attrs.Props{
+			attrs.Type:        "text",
+			attrs.Name:        "hostname",
+			attrs.Value:       info.Hostname,
+			attrs.Style:       fieldStyle,
+			attrs.Placeholder: "Device hostname",
+		}),
+		elem.P(attrs.Props{
+			attrs.Style: styles.Props{
+				styles.FontSize: "0.82rem",
+				styles.Color:    "var(--md-default-fg-color--light)",
+				styles.Margin:   "-0.75rem 0 1rem",
+			}.ToInline(),
+		}, elem.Text("You can change this. Only what you confirm here is saved.")),
+		deviceInfoTable(info),
+		privacyNote,
+		elem.Div(attrs.Props{
+			attrs.Style: styles.Props{
+				styles.Display:        "flex",
+				styles.Gap:            "0.75rem",
+				styles.JustifyContent: "flex-end",
+				styles.MarginTop:      "1.5rem",
+			}.ToInline(),
+		},
+			elem.A(attrs.Props{
+				attrs.Href: "javascript:window.close()",
+				attrs.Style: styles.Props{
+					styles.Padding:       "0.5rem 1.25rem",
+					styles.Border:        "1px solid var(--md-default-fg-color--lighter)",
+					styles.BorderRadius:  "4px",
+					styles.TextDecoration:"none",
+					styles.Color:         "var(--md-default-fg-color)",
+				}.ToInline(),
+			}, elem.Text("Cancel")),
+			elem.Button(
+				attrs.Props{
+					attrs.Type: "submit",
+					attrs.Style: styles.Props{
+						styles.Padding:      "0.5rem 1.25rem",
+						styles.Background:   "var(--md-primary-fg-color)",
+						styles.Color:        "var(--md-primary-bg-color)",
+						styles.Border:       "none",
+						styles.BorderRadius: "4px",
+						styles.FontWeight:   "600",
+						styles.Cursor:       "pointer",
+					}.ToInline(),
+				},
+				elem.Text("OK"),
+			),
 		),
 	)
 
+	titleText := "Confirm registration"
+	if isGlue {
+		titleText = "Confirm registration — Glue"
+	}
+
 	return HtmlStructure(
-		elem.Title(nil, elem.Text("Headscale - Confirm node registration")),
+		elem.Title(nil, elem.Text(titleText)),
 		mdTypesetBody(
 			headscaleLogo(),
-			H2(elem.Text("Confirm node registration")),
+			H2(elem.Text("Confirm your details")),
 			P(elem.Text(
-				"A device is asking to be added to your tailnet. "+
-					"Please review the details below and confirm that this device is yours.",
+				"Review and edit the details below before registering this device. "+
+					"Click OK to confirm, or Cancel to abort.",
 			)),
-			deviceList,
 			form,
 			P(elem.Text(
-				"If you do not recognise this device, close this window. "+
+				"If you do not recognise this device, click Cancel. "+
 					"The registration request will expire automatically.",
 			)),
 			pageFooter(),
 		),
+	)
+}
+
+// deviceInfoTable shows the read-only device properties (OS, machine key).
+func deviceInfoTable(info RegisterConfirmInfo) *elem.Element {
+	return deviceTable(
+		[4][2]string{
+			{"OS", displayOrUnknown(info.OS)},
+			{"Machine key", info.MachineKey},
+			{"", ""},
+			{"", ""},
+		},
 	)
 }
 

@@ -715,9 +715,13 @@ func (a *AuthProviderOIDC) renderRegistrationConfirmInterstitial(
 		FormAction:    "/register/confirm/" + authID.String(),
 		CSRFTokenName: registerConfirmCSRFCookie,
 		CSRFToken:     csrf,
-		User:          user.Display(),
-		Hostname:      regData.Hostname,
-		MachineKey:    regData.MachineKey.ShortString(),
+		// Pre-fill editable fields from IdP claims and device data.
+		// User sees these in the form and may edit before clicking OK.
+		DisplayName: user.Display(),
+		Email:       user.Email,
+		Hostname:    regData.Hostname,
+		MachineKey:  regData.MachineKey.ShortString(),
+		ProductMode: string(a.cfg.ProductMode),
 	}
 	if regData.Hostinfo != nil {
 		info.OS = regData.Hostinfo.OS
@@ -809,6 +813,47 @@ func (a *AuthProviderOIDC) RegisterConfirmHandler(
 
 		return
 	}
+
+	// Read the user-confirmed (possibly edited) field values.
+	// These are what the user saw in the editable form and clicked OK on.
+	confirmedDisplayName := req.PostFormValue("display_name")
+	confirmedEmail        := req.PostFormValue("email")
+	confirmedHostname     := req.PostFormValue("hostname")
+
+	// Apply the confirmed values to the user record before registration.
+	// Horizon: IdP values were pre-filled; user confirmed them (readonly in UI).
+	//          We trust what came from IdP — the group gate already validated.
+	// Glue:    User may have edited or cleared fields.
+	//          We store only what is non-empty after confirmation.
+	//          If the user cleared email, we store nothing for email.
+	if a.cfg.ProductMode.IsGlue() {
+		// Glue: store only what the user explicitly confirmed.
+		user.Name = confirmedDisplayName
+		user.Email = confirmedEmail  // may be empty — that is fine
+		// Session logger is a no-op in Glue — nothing written below this point
+		// about IPs, last_seen, or traffic ever reaches the database.
+	} else {
+		// Horizon: display name may have an alias appended but
+		// core identity (email) is from IdP and treated as authoritative.
+		// We accept the confirmed display name (user may have added an alias)
+		// but keep the IdP email.
+		if confirmedDisplayName != "" {
+			user.Name = confirmedDisplayName
+		}
+		// Log the registration event to the Horizon audit trail.
+		a.h.sessionLogger.Log(types.SessionEvent{
+			Timestamp: time.Now(),
+			Namespace: user.GetNamespaceName(),
+			NodeID:    "", // filled after handleRegistration
+			NodeName:  confirmedHostname,
+			EventType: types.EventNodeRegistered,
+		})
+		_ = confirmedEmail // email already set from IdP claim
+	}
+
+	// Apply the confirmed hostname to the registration cache
+	// so handleRegistration uses the user-confirmed value.
+	authReq.SetConfirmedHostname(confirmedHostname)
 
 	newNode, err := a.handleRegistration(user, authID, pending.NodeExpiry)
 	if err != nil {

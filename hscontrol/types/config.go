@@ -141,6 +141,15 @@ type Config struct {
 	Policy PolicyConfig
 
 	Tuning Tuning
+
+	// ProductMode controls privacy and logging behaviour.
+	// "horizon" (default): full audit logging, IdP-authoritative identity.
+	// "glue": zero session logs, user-supplied identity, anonymous operation.
+	ProductMode ProductMode `mapstructure:"product_mode"`
+
+	// AuditWebhookURL is the SIEM export endpoint for Horizon audit logs.
+	// Empty string disables webhook export. Glue ignores this field.
+	AuditWebhookURL string `mapstructure:"audit_webhook_url"`
 }
 
 type DNSConfig struct {

@@ -109,6 +109,11 @@ type Headscale struct {
 	mapBatcher     *mapper.Batcher
 
 	clientStreamsOpen sync.WaitGroup
+
+	// sessionLogger is the audit log implementation.
+	// Horizon: HorizonLogger — writes to DB, exports to SIEM.
+	// Glue:    GlueLogger   — documented no-op, zero writes.
+	sessionLogger types.SessionLogger
 }
 
 var (
@@ -137,11 +142,21 @@ func NewHeadscale(cfg *types.Config) (*Headscale, error) {
 		return nil, fmt.Errorf("init state: %w", err)
 	}
 
+	// Wire session logger based on product mode.
+	// This is the privacy boundary — Glue gets a documented no-op.
+	var sessionLogger types.SessionLogger
+	if cfg.ProductMode.IsGlue() {
+		sessionLogger = types.NewGlueLogger()
+	} else {
+		sessionLogger = types.NewHorizonLogger(nil, cfg.AuditWebhookURL, "")
+	}
+
 	app := Headscale{
 		cfg:               cfg,
 		noisePrivateKey:   noisePrivateKey,
 		clientStreamsOpen: sync.WaitGroup{},
 		state:             s,
+		sessionLogger:     sessionLogger,
 	}
 
 	if len(cfg.TrustedProxies) > 0 {
