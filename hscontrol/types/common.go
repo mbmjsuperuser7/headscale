@@ -354,6 +354,13 @@ func (rn *AuthRequest) IsSSHCheck() bool {
 	return rn.sshBinding != nil
 }
 
+// SetConfirmedHostname updates the hostname in registration data
+// with the value the user confirmed/edited in the registration form.
+func (rn *AuthRequest) SetConfirmedHostname(hostname string) {
+	if rn.regData == nil || hostname == "" { return }
+	rn.regData.Hostname = hostname
+}
+
 // SetPendingConfirmation marks this [AuthRequest] as having an
 // OIDC-resolved user that is waiting to confirm the registration on
 // the interstitial. The OIDC callback should call this and then render
