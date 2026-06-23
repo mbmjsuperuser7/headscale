@@ -10,7 +10,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
-	"tailscale.com/util/zlog/zf"
 
 	"github.com/juanfont/headscale/hscontrol/types"
 )
@@ -99,7 +98,7 @@ func (h *Headscale) UpdateGatewayPolicyHandler(w http.ResponseWriter, r *http.Re
 	h.Change(nodeChange)
 
 	log.Info().
-		Str(zf.Node, node.Hostname()).
+		Str("node", node.Hostname()).
 		Uint64("nodeId", nodeID).
 		Uint64("version", node.GatewayPolicyVersion()).
 		Int("profiles", len(req.Profiles)).
