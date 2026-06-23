@@ -1,6 +1,6 @@
 module github.com/juanfont/headscale
 
-go 1.26.3
+go 1.26
 
 require (
 	github.com/arl/statsviz v0.8.0
@@ -249,12 +249,4 @@ require (
 	k8s.io/client-go v0.34.0 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 	software.sslmate.com/src/go-pkcs12 v0.4.0 // indirect
-)
-
-tool (
-	golang.org/x/tools/cmd/stress
-	golang.org/x/tools/cmd/stringer
-	tailscale.com/cmd/tailscale
-	tailscale.com/cmd/viewer
-	tailscale.com/tstest/mts
 )
