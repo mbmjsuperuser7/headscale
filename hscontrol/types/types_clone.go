@@ -7,12 +7,9 @@ package types
 
 import (
 	"database/sql"
-	"net/netip"
 	"time"
 
 	"gorm.io/gorm"
-	"tailscale.com/tailcfg"
-	"tailscale.com/types/key"
 )
 
 // Clone makes a deep copy of User.
