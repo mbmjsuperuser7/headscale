@@ -304,7 +304,7 @@ var _NodeViewNeedsRegeneration = Node(struct {
 	GatewayProfiles      GatewayProfiles
 	GatewayPolicyVersion uint64
 	GatewayFailMode      string
-}{})'
+}{})
 
 
 // View returns a read-only view of PreAuthKey.
