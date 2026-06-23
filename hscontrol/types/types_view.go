@@ -275,36 +275,6 @@ func (v NodeView) GatewayPolicyVersion() uint64     { return v.ж.GatewayPolicyV
 func (v NodeView) GatewayFailMode() string          { return v.ж.GatewayFailMode }
 
 // A compilation failure here means this code must be regenerated, with the command at the top of this file.
-var _NodeViewNeedsRegeneration = Node(struct {
-	ID             NodeID
-	MachineKey     key.MachinePublic
-	NodeKey        key.NodePublic
-	DiscoKey       key.DiscoPublic
-	Endpoints      AddrPorts
-	Hostinfo       *tailcfg.Hostinfo
-	IPv4           *netip.Addr
-	IPv6           *netip.Addr
-	Hostname       string
-	GivenName      string
-	UserID         *uint
-	User           *User
-	RegisterMethod string
-	Tags           Strings
-	AuthKeyID      *uint64
-	AuthKey        *PreAuthKey
-	Expiry         *time.Time
-	LastSeen       *time.Time
-	ApprovedRoutes Prefixes
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	DeletedAt      *time.Time
-	IsOnline             *bool
-	Unhealthy            bool
-	SessionEpoch         uint64
-	GatewayProfiles      GatewayProfiles
-	GatewayPolicyVersion uint64
-	GatewayFailMode      string
-}{})
 
 
 // View returns a read-only view of PreAuthKey.
