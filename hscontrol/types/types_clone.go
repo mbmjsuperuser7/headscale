@@ -74,6 +74,8 @@ func (src *Node) Clone() *Node {
 	if dst.IsOnline != nil {
 		dst.IsOnline = new(*src.IsOnline)
 	}
+	// vpngw: GatewayProfiles is a slice — must be deep copied.
+	dst.GatewayProfiles = append(src.GatewayProfiles[:0:0], src.GatewayProfiles...)
 	return dst
 }
 

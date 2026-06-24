@@ -745,6 +745,16 @@ WHERE expiry IS NOT NULL AND expiry < '1900-01-01';
 				Rollback: func(db *gorm.DB) error { return nil },
 			},
 			{
+				// vpngw: create Horizon audit_log table for 30-day session event retention.
+				ID: "202606011201-horizon-audit-log",
+				Migrate: func(tx *gorm.DB) error {
+					return tx.AutoMigrate(&AuditLogEntry{})
+				},
+				Rollback: func(tx *gorm.DB) error {
+					return tx.Migrator().DropTable(&AuditLogEntry{})
+				},
+			},
+			{
 				// vpngw: add gateway policy columns to nodes table.
 				// gateway_profiles:       JSON array of GatewayProfile (subnet→exitnode→security)
 				// gateway_policy_version: monotonic counter, agent echoes in ACK

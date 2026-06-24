@@ -144,11 +144,12 @@ func NewHeadscale(cfg *types.Config) (*Headscale, error) {
 
 	// Wire session logger based on product mode.
 	// This is the privacy boundary — Glue gets a documented no-op.
+	// Horizon gets the real DB-backed logger with SIEM webhook export.
 	var sessionLogger types.SessionLogger
 	if cfg.ProductMode.IsGlue() {
 		sessionLogger = types.NewGlueLogger()
 	} else {
-		sessionLogger = types.NewHorizonLogger(nil, cfg.AuditWebhookURL, "")
+		sessionLogger = db.NewHorizonLoggerDB(s.DB.DB, cfg.AuditWebhookURL, "")
 	}
 
 	app := Headscale{

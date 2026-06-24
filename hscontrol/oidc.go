@@ -843,7 +843,7 @@ func (a *AuthProviderOIDC) RegisterConfirmHandler(
 		// Log the registration event to the Horizon audit trail.
 		a.h.sessionLogger.Log(types.SessionEvent{
 			Timestamp: time.Now(),
-			Namespace: user.GetNamespaceName(),
+			Namespace: user.Username(),
 			NodeID:    "", // filled after handleRegistration
 			NodeName:  confirmedHostname,
 			EventType: types.EventNodeRegistered,

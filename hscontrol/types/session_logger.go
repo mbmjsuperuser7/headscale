@@ -73,49 +73,6 @@ type SessionLogger interface {
 	Flush() error
 }
 
-// HorizonLogger writes session events to the database
-// and exports them to the configured SIEM endpoint.
-// Retention: 30 days. Export: webhook (Splunk, Elastic, custom).
-type HorizonLogger struct {
-	// db is the database connection (GORM).
-	// Populated by NewHorizonLogger.
-	db interface{} // *gorm.DB — avoid import cycle, cast at use site
-
-	// webhookURL is the SIEM export endpoint, may be empty.
-	webhookURL string
-
-	// namespace scopes all log entries.
-	namespace string
-}
-
-// NewHorizonLogger creates a logger that persists events.
-func NewHorizonLogger(db interface{}, webhookURL, namespace string) SessionLogger {
-	return &HorizonLogger{
-		db:         db,
-		webhookURL: webhookURL,
-		namespace:  namespace,
-	}
-}
-
-func (l *HorizonLogger) Log(event SessionEvent) {
-	event.Namespace = l.namespace
-	// Implementation: insert into audit_log table.
-	// Full implementation in hscontrol/db/audit_log.go
-	// Called here as interface satisfaction — db write happens in db package.
-	_ = event
-}
-
-func (l *HorizonLogger) Export(events []SessionEvent) error {
-	if l.webhookURL == "" {
-		return nil
-	}
-	// Implementation: POST JSON batch to webhookURL.
-	// Full implementation in hscontrol/audit/webhook.go
-	return nil
-}
-
-func (l *HorizonLogger) Flush() error { return nil }
-
 // GlueLogger discards all events.
 // This is the privacy guarantee — not a config flag that could be
 // accidentally enabled. The Glue binary contains only this implementation.
