@@ -746,12 +746,28 @@ WHERE expiry IS NOT NULL AND expiry < '1900-01-01';
 			},
 			{
 				// vpngw: create Horizon audit_log table for 30-day session event retention.
+				// Uses raw SQL to match schema.sql exactly (no backtick-quoted identifiers).
 				ID: "202606011201-horizon-audit-log",
 				Migrate: func(tx *gorm.DB) error {
-					return tx.AutoMigrate(&AuditLogEntry{})
+					return tx.Exec(`CREATE TABLE IF NOT EXISTS audit_log_entries(
+  id integer PRIMARY KEY AUTOINCREMENT,
+  created_at datetime,
+  namespace text NOT NULL,
+  node_id text,
+  node_name text,
+  event_type text NOT NULL,
+  src_ip text,
+  exit_node_id text,
+  bytes_in integer,
+  bytes_out integer
+);
+CREATE INDEX IF NOT EXISTS idx_audit_log_entries_created_at ON audit_log_entries(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_log_entries_namespace ON audit_log_entries(namespace);
+CREATE INDEX IF NOT EXISTS idx_audit_log_entries_node_id ON audit_log_entries(node_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_entries_event_type ON audit_log_entries(event_type);`).Error
 				},
 				Rollback: func(tx *gorm.DB) error {
-					return tx.Migrator().DropTable(&AuditLogEntry{})
+					return tx.Exec("DROP TABLE IF EXISTS audit_log_entries").Error
 				},
 			},
 			{
