@@ -149,7 +149,7 @@ func NewHeadscale(cfg *types.Config) (*Headscale, error) {
 	if cfg.ProductMode.IsGlue() {
 		sessionLogger = types.NewGlueLogger()
 	} else {
-		sessionLogger = db.NewHorizonLoggerDB(s.DB.DB, cfg.AuditWebhookURL, "")
+		sessionLogger = db.NewHorizonLoggerDB(s.DB().DB, cfg.AuditWebhookURL, "")
 	}
 
 	app := Headscale{

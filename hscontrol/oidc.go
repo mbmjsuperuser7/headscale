@@ -721,7 +721,7 @@ func (a *AuthProviderOIDC) renderRegistrationConfirmInterstitial(
 		Email:       user.Email,
 		Hostname:    regData.Hostname,
 		MachineKey:  regData.MachineKey.ShortString(),
-		ProductMode: string(a.cfg.ProductMode),
+		ProductMode: string(a.h.cfg.ProductMode),
 	}
 	if regData.Hostinfo != nil {
 		info.OS = regData.Hostinfo.OS
@@ -826,7 +826,7 @@ func (a *AuthProviderOIDC) RegisterConfirmHandler(
 	// Glue:    User may have edited or cleared fields.
 	//          We store only what is non-empty after confirmation.
 	//          If the user cleared email, we store nothing for email.
-	if a.cfg.ProductMode.IsGlue() {
+	if a.h.cfg.ProductMode.IsGlue() {
 		// Glue: store only what the user explicitly confirmed.
 		user.Name = confirmedDisplayName
 		user.Email = confirmedEmail  // may be empty — that is fine
