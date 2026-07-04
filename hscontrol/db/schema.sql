@@ -93,6 +93,11 @@ CREATE TABLE nodes(
   updated_at datetime,
   deleted_at datetime,
 
+  -- vpngw: gateway policy fields for nodes tagged tag:gateway
+  gateway_profiles text NOT NULL DEFAULT '[]',
+  gateway_policy_version integer NOT NULL DEFAULT 0,
+  gateway_fail_mode text NOT NULL DEFAULT 'open',
+
   CONSTRAINT fk_nodes_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
   CONSTRAINT fk_nodes_auth_key FOREIGN KEY(auth_key_id) REFERENCES pre_auth_keys(id)
 );
@@ -112,3 +117,21 @@ CREATE TABLE database_versions(
   version text NOT NULL,
   updated_at datetime
 );
+
+-- vpngw: Horizon audit log — 30 day retention, SIEM export
+CREATE TABLE audit_log_entries(
+  id integer PRIMARY KEY AUTOINCREMENT,
+  created_at datetime,
+  namespace text NOT NULL,
+  node_id text,
+  node_name text,
+  event_type text NOT NULL,
+  src_ip text,
+  exit_node_id text,
+  bytes_in integer,
+  bytes_out integer
+);
+CREATE INDEX idx_audit_log_entries_created_at ON audit_log_entries(created_at);
+CREATE INDEX idx_audit_log_entries_namespace ON audit_log_entries(namespace);
+CREATE INDEX idx_audit_log_entries_node_id ON audit_log_entries(node_id);
+CREATE INDEX idx_audit_log_entries_event_type ON audit_log_entries(event_type);
