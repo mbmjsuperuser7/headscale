@@ -996,9 +996,8 @@ func (s *State) UpdateGatewayPolicy(nodeID types.NodeID, profiles types.GatewayP
 	node.GatewayPolicyVersion++
 	node.GatewayFailMode = failMode
 
-	if err := s.nodeStore.PutNode(*node); err != nil {
-		return types.NodeView{}, change.Change{}, fmt.Errorf("vpngw: update node store: %w", err)
-	}
+	// PutNode returns NodeView, not error — update in-memory store.
+	s.nodeStore.PutNode(*node)
 
 	return s.persistNodeToDB(node.View())
 }

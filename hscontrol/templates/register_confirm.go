@@ -105,7 +105,7 @@ func RegisterConfirm(info RegisterConfirmInfo) *elem.Element {
 		attrs.Placeholder: "Display name",
 	}
 	if !isGlue {
-		nameReadonly[attrs.ReadOnly] = "true"
+		nameReadonly[attrs.Readonly] = "true"
 	}
 
 	emailReadonly := attrs.Props{
@@ -116,7 +116,7 @@ func RegisterConfirm(info RegisterConfirmInfo) *elem.Element {
 		attrs.Placeholder: "Email address",
 	}
 	if !isGlue {
-		emailReadonly[attrs.ReadOnly] = "true"
+		emailReadonly[attrs.Readonly] = "true"
 	}
 
 	var emailHint elem.Node
