@@ -447,6 +447,10 @@ func TestBackfillIPAddresses(t *testing.T) {
 		"Hostinfo",
 		"CreatedAt",
 		"UpdatedAt",
+		// vpngw gateway fields: DB defaults ('[]', 'open'); irrelevant to IP backfill.
+		"GatewayProfiles",
+		"GatewayPolicyVersion",
+		"GatewayFailMode",
 	))
 
 	for _, tt := range tests {

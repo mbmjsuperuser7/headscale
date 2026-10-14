@@ -58,7 +58,8 @@ const (
 // SessionLogger is the audit log interface.
 // Horizon: writes to DB + exports to SIEM.
 // Glue:    discards everything — the no-op implementation
-//          is the privacy guarantee, not a config flag.
+//
+//	is the privacy guarantee, not a config flag.
 type SessionLogger interface {
 	// Log records a session event.
 	// Glue's implementation is a documented no-op.

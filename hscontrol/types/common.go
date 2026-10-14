@@ -357,7 +357,9 @@ func (rn *AuthRequest) IsSSHCheck() bool {
 // SetConfirmedHostname updates the hostname in registration data
 // with the value the user confirmed/edited in the registration form.
 func (rn *AuthRequest) SetConfirmedHostname(hostname string) {
-	if rn.regData == nil || hostname == "" { return }
+	if rn.regData == nil || hostname == "" {
+		return
+	}
 	rn.regData.Hostname = hostname
 }
 

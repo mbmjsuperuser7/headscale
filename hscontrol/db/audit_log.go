@@ -49,18 +49,33 @@ func NewHorizonLoggerDB(db *gorm.DB, webhookURL, namespace string) types.Session
 
 func (l *horizonLoggerDB) Log(event types.SessionEvent) {
 	event.Namespace = l.namespace
-	if event.Timestamp.IsZero() { event.Timestamp = time.Now() }
-	select { case l.buf <- event: default: }
+	if event.Timestamp.IsZero() {
+		event.Timestamp = time.Now()
+	}
+	select {
+	case l.buf <- event:
+	default:
+	}
 }
 
 func (l *horizonLoggerDB) Export(events []types.SessionEvent) error {
-	if l.webhookURL == "" || len(events) == 0 { return nil }
-	payload, err := json.Marshal(struct{ Events []types.SessionEvent `json:"events"` }{Events: events})
-	if err != nil { return fmt.Errorf("audit export marshal: %w", err) }
+	if l.webhookURL == "" || len(events) == 0 {
+		return nil
+	}
+	payload, err := json.Marshal(struct {
+		Events []types.SessionEvent `json:"events"`
+	}{Events: events})
+	if err != nil {
+		return fmt.Errorf("audit export marshal: %w", err)
+	}
 	resp, err := http.Post(l.webhookURL, "application/json", bytes.NewReader(payload))
-	if err != nil { return fmt.Errorf("audit export POST: %w", err) }
+	if err != nil {
+		return fmt.Errorf("audit export POST: %w", err)
+	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= 400 { return fmt.Errorf("audit export: SIEM returned %d", resp.StatusCode) }
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("audit export: SIEM returned %d", resp.StatusCode)
+	}
 	return nil
 }
 
@@ -72,7 +87,9 @@ func (l *horizonLoggerDB) flushLoop() {
 	defer ticker.Stop()
 	var pending []types.SessionEvent
 	flush := func() {
-		if len(pending) == 0 { return }
+		if len(pending) == 0 {
+			return
+		}
 		entries := make([]AuditLogEntry, 0, len(pending))
 		for _, e := range pending {
 			entry := AuditLogEntry{
@@ -81,7 +98,9 @@ func (l *horizonLoggerDB) flushLoop() {
 				EventType: string(e.EventType), ExitNodeID: e.ExitNodeID,
 				BytesIn: e.BytesIn, BytesOut: e.BytesOut,
 			}
-			if e.SrcIP != nil { entry.SrcIP = e.SrcIP.String() }
+			if e.SrcIP != nil {
+				entry.SrcIP = e.SrcIP.String()
+			}
 			entries = append(entries, entry)
 		}
 		l.db.CreateInBatches(entries, 100)
@@ -91,9 +110,14 @@ func (l *horizonLoggerDB) flushLoop() {
 	for {
 		select {
 		case event, ok := <-l.buf:
-			if !ok { flush(); return }
+			if !ok {
+				flush()
+				return
+			}
 			pending = append(pending, event)
-			if len(pending) >= 100 { flush() }
+			if len(pending) >= 100 {
+				flush()
+			}
 		case <-ticker.C:
 			flush()
 		}
