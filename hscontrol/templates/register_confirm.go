@@ -134,11 +134,11 @@ func RegisterConfirm(info RegisterConfirmInfo) *elem.Element {
 
 	privacyNote := elem.P(attrs.Props{
 		attrs.Style: styles.Props{
-			styles.FontSize:       "0.82rem",
-			styles.Color:          "var(--md-default-fg-color--light)",
-			styles.BorderTop:      "1px solid var(--md-default-fg-color--lighter)",
-			styles.PaddingTop:     "0.75rem",
-			styles.MarginTop:      "0.5rem",
+			styles.FontSize:   "0.82rem",
+			styles.Color:      "var(--md-default-fg-color--light)",
+			styles.BorderTop:  "1px solid var(--md-default-fg-color--lighter)",
+			styles.PaddingTop: "0.75rem",
+			styles.MarginTop:  "0.5rem",
 		}.ToInline(),
 	})
 	if isGlue {
@@ -200,11 +200,11 @@ func RegisterConfirm(info RegisterConfirmInfo) *elem.Element {
 			elem.A(attrs.Props{
 				attrs.Href: "javascript:window.close()",
 				attrs.Style: styles.Props{
-					styles.Padding:       "0.5rem 1.25rem",
-					styles.Border:        "1px solid var(--md-default-fg-color--lighter)",
-					styles.BorderRadius:  "4px",
-					styles.TextDecoration:"none",
-					styles.Color:         "var(--md-default-fg-color)",
+					styles.Padding:        "0.5rem 1.25rem",
+					styles.Border:         "1px solid var(--md-default-fg-color--lighter)",
+					styles.BorderRadius:   "4px",
+					styles.TextDecoration: "none",
+					styles.Color:          "var(--md-default-fg-color)",
 				}.ToInline(),
 			}, elem.Text("Cancel")),
 			elem.Button(
@@ -225,9 +225,11 @@ func RegisterConfirm(info RegisterConfirmInfo) *elem.Element {
 		),
 	)
 
-	titleText := "Confirm registration"
+	// Keep the upstream phrase "Confirm node registration": headscale's OIDC
+	// tests (and anything scraping the interstitial) key on it.
+	titleText := "Horizon — Confirm node registration"
 	if isGlue {
-		titleText = "Confirm registration — Glue"
+		titleText = "Glue — Confirm node registration"
 	}
 
 	return HtmlStructure(
