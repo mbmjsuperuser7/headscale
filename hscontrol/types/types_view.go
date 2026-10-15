@@ -20,7 +20,7 @@ import (
 	"tailscale.com/types/views"
 )
 
-//go:generate go run tailscale.com/cmd/cloner  -clonefunc=false -type=User,Node,PreAuthKey
+//go:generate go run tailscale.com/cmd/cloner  -clonefunc=false -type=User,Node,PreAuthKey,GatewayProfile
 
 // View returns a read-only view of User.
 func (p *User) View() UserView {
@@ -260,6 +260,13 @@ func (v NodeView) DeletedAt() views.ValuePointer[time.Time] {
 // Every writer must derive it, so online means the same thing everywhere.
 func (v NodeView) IsOnline() views.ValuePointer[bool] { return views.ValuePointerOf(v.ж.IsOnline) }
 
+// GatewayPolicy fields — populated for nodes tagged tag:gateway.
+// Embedded in MapResponse.Node.CapMap under CapGatewayPolicy.
+// Agent applies these as source-based policy routing rules.
+func (v NodeView) GatewayProfiles() GatewayProfile { panic("unsupported") }
+func (v NodeView) GatewayPolicyVersion() uint64    { return v.ж.GatewayPolicyVersion }
+func (v NodeView) GatewayFailMode() string         { return v.ж.GatewayFailMode }
+
 // Unhealthy excludes the node from primary route election while
 // online. Written by the HA prober. Runtime-only.
 func (v NodeView) Unhealthy() bool { return v.ж.Unhealthy }
@@ -283,32 +290,35 @@ func (v NodeView) String() string       { return v.ж.String() }
 
 // A compilation failure here means this code must be regenerated, with the command at the top of this file.
 var _NodeViewNeedsRegeneration = Node(struct {
-	ID             NodeID
-	MachineKey     key.MachinePublic
-	NodeKey        key.NodePublic
-	DiscoKey       key.DiscoPublic
-	Endpoints      AddrPorts
-	Hostinfo       *tailcfg.Hostinfo
-	IPv4           *netip.Addr
-	IPv6           *netip.Addr
-	Hostname       string
-	GivenName      string
-	UserID         *uint
-	User           *User
-	RegisterMethod string
-	Tags           Strings
-	AuthKeyID      *uint64
-	AuthKey        *PreAuthKey
-	Expiry         *time.Time
-	LastSeen       *time.Time
-	ApprovedRoutes Prefixes
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	DeletedAt      *time.Time
-	IsOnline       *bool
-	Unhealthy      bool
-	ActiveSessions int
-	SessionEpoch   uint64
+	ID                   NodeID
+	MachineKey           key.MachinePublic
+	NodeKey              key.NodePublic
+	DiscoKey             key.DiscoPublic
+	Endpoints            AddrPorts
+	Hostinfo             *tailcfg.Hostinfo
+	IPv4                 *netip.Addr
+	IPv6                 *netip.Addr
+	Hostname             string
+	GivenName            string
+	UserID               *uint
+	User                 *User
+	RegisterMethod       string
+	Tags                 Strings
+	AuthKeyID            *uint64
+	AuthKey              *PreAuthKey
+	Expiry               *time.Time
+	LastSeen             *time.Time
+	ApprovedRoutes       Prefixes
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+	DeletedAt            *time.Time
+	IsOnline             *bool
+	GatewayProfiles      GatewayProfiles
+	GatewayPolicyVersion uint64
+	GatewayFailMode      string
+	Unhealthy            bool
+	ActiveSessions       int
+	SessionEpoch         uint64
 }{})
 
 // View returns a read-only view of PreAuthKey.
@@ -425,4 +435,109 @@ var _PreAuthKeyViewNeedsRegeneration = PreAuthKey(struct {
 	Tags       []string
 	CreatedAt  *time.Time
 	Expiration *time.Time
+}{})
+
+// View returns a read-only view of GatewayProfile.
+func (p *GatewayProfile) View() GatewayProfileView {
+	return GatewayProfileView{ж: p}
+}
+
+// GatewayProfileView provides a read-only view over GatewayProfile.
+//
+// Its methods should only be called if `Valid()` returns true.
+type GatewayProfileView struct {
+	// ж is the underlying mutable value, named with a hard-to-type
+	// character that looks pointy like a pointer.
+	// It is named distinctively to make you think of how dangerous it is to escape
+	// to callers. You must not let callers be able to mutate it.
+	ж *GatewayProfile
+}
+
+// Valid reports whether v's underlying value is non-nil.
+func (v GatewayProfileView) Valid() bool { return v.ж != nil }
+
+// AsStruct returns a clone of the underlying value which aliases no memory with
+// the original.
+func (v GatewayProfileView) AsStruct() *GatewayProfile {
+	if v.ж == nil {
+		return nil
+	}
+	return v.ж.Clone()
+}
+
+// MarshalJSON implements [jsonv1.Marshaler].
+func (v GatewayProfileView) MarshalJSON() ([]byte, error) {
+	return jsonv1.Marshal(v.ж)
+}
+
+// MarshalJSONTo implements [jsonv2.MarshalerTo].
+func (v GatewayProfileView) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return jsonv2.MarshalEncode(enc, v.ж)
+}
+
+// UnmarshalJSON implements [jsonv1.Unmarshaler].
+func (v *GatewayProfileView) UnmarshalJSON(b []byte) error {
+	if v.ж != nil {
+		return errors.New("already initialized")
+	}
+	if len(b) == 0 {
+		return nil
+	}
+	var x GatewayProfile
+	if err := jsonv1.Unmarshal(b, &x); err != nil {
+		return err
+	}
+	v.ж = &x
+	return nil
+}
+
+// UnmarshalJSONFrom implements [jsonv2.UnmarshalerFrom].
+func (v *GatewayProfileView) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	if v.ж != nil {
+		return errors.New("already initialized")
+	}
+	var x GatewayProfile
+	if err := jsonv2.UnmarshalDecode(dec, &x); err != nil {
+		return err
+	}
+	v.ж = &x
+	return nil
+}
+
+// ID is a stable opaque identifier for this profile.
+// Used by the agent to correlate ACKs and detect stale state.
+func (v GatewayProfileView) ID() string { return v.ж.ID }
+
+// SourceSubnet is the LAN subnet this profile governs.
+func (v GatewayProfileView) SourceSubnet() netip.Prefix { return v.ж.SourceSubnet }
+
+// ExitNodeID is the stable StableNodeID of the WireGuard peer
+// that carries internet traffic for this subnet.
+// Headscale resolves tag references to concrete IDs before sending.
+func (v GatewayProfileView) ExitNodeID() string { return v.ж.ExitNodeID }
+
+// SecurityLevel controls firewall enforcement.
+// "open"      — route only, no extra firewall rules
+// "encrypted" — require WireGuard tunnel
+// "full"      — tunnel + DNS override + block WAN bypass
+func (v GatewayProfileView) SecurityLevel() string { return v.ж.SecurityLevel }
+
+// FailMode controls agent behaviour on control server disconnect.
+// "open"   — keep last-applied routes (availability-first)
+// "closed" — tear down routes (security-first)
+func (v GatewayProfileView) FailMode() string { return v.ж.FailMode }
+
+// DNSOverride, if set, forces DNS for this subnet to this address.
+func (v GatewayProfileView) DNSOverride() views.ValuePointer[netip.Addr] {
+	return views.ValuePointerOf(v.ж.DNSOverride)
+}
+
+// A compilation failure here means this code must be regenerated, with the command at the top of this file.
+var _GatewayProfileViewNeedsRegeneration = GatewayProfile(struct {
+	ID            string
+	SourceSubnet  netip.Prefix
+	ExitNodeID    string
+	SecurityLevel string
+	FailMode      string
+	DNSOverride   *netip.Addr
 }{})

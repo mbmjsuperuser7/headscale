@@ -26,6 +26,47 @@ import (
 	"gorm.io/gorm/schema"
 )
 
+// vpngw/Horizon schema additions. Shared by the upgrade migrations and by
+// InitSchema (fresh databases), so both paths produce exactly schema.sql.
+const (
+	sqlAddGatewayProfiles      = `ALTER TABLE nodes ADD COLUMN gateway_profiles TEXT NOT NULL DEFAULT '[]'`
+	sqlAddGatewayPolicyVersion = `ALTER TABLE nodes ADD COLUMN gateway_policy_version INTEGER NOT NULL DEFAULT 0`
+	sqlAddGatewayFailMode      = `ALTER TABLE nodes ADD COLUMN gateway_fail_mode TEXT NOT NULL DEFAULT 'open'`
+	sqlCreateAuditLog          = `CREATE TABLE IF NOT EXISTS audit_log_entries(
+  id integer PRIMARY KEY AUTOINCREMENT,
+  created_at datetime,
+  namespace text NOT NULL,
+  node_id text,
+  node_name text,
+  event_type text NOT NULL,
+  src_ip text,
+  exit_node_id text,
+  bytes_in integer,
+  bytes_out integer
+);
+CREATE INDEX IF NOT EXISTS idx_audit_log_entries_created_at ON audit_log_entries(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_log_entries_namespace ON audit_log_entries(namespace);
+CREATE INDEX IF NOT EXISTS idx_audit_log_entries_node_id ON audit_log_entries(node_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_entries_event_type ON audit_log_entries(event_type);`
+)
+
+// addGatewayColumns adds the vpngw gateway columns that are missing.
+func addGatewayColumns(tx *gorm.DB) error {
+	for _, c := range []struct{ name, sql string }{
+		{"gateway_profiles", sqlAddGatewayProfiles},
+		{"gateway_policy_version", sqlAddGatewayPolicyVersion},
+		{"gateway_fail_mode", sqlAddGatewayFailMode},
+	} {
+		if tx.Migrator().HasColumn(&types.Node{}, c.name) {
+			continue
+		}
+		if err := tx.Exec(c.sql).Error; err != nil {
+			return fmt.Errorf("vpngw: add %s column: %w", c.name, err)
+		}
+	}
+	return nil
+}
+
 //go:embed schema.sql
 var dbSchema string
 
@@ -808,6 +849,34 @@ WHERE tags IS NOT NULL AND tags != '[]' AND tags != '' AND tags != 'null'
 				},
 				Rollback: func(db *gorm.DB) error { return nil },
 			},
+			{
+				// vpngw: create Horizon audit_log table for 30-day session event retention.
+				// Uses raw SQL to match schema.sql exactly (no backtick-quoted identifiers).
+				ID: "202606011201-horizon-audit-log",
+				Migrate: func(tx *gorm.DB) error {
+					return tx.Exec(sqlCreateAuditLog).Error
+				},
+				Rollback: func(tx *gorm.DB) error {
+					return tx.Exec("DROP TABLE IF EXISTS audit_log_entries").Error
+				},
+			},
+			{
+				// vpngw: add gateway policy columns to nodes table.
+				// gateway_profiles:       JSON array of GatewayProfile (subnet→exitnode→security)
+				// gateway_policy_version: monotonic counter, agent echoes in ACK
+				// gateway_fail_mode:      "open" or "closed" on control disconnect
+				ID: "202606011200-vpngw-gateway-policy",
+				Migrate: func(tx *gorm.DB) error {
+					return addGatewayColumns(tx)
+				},
+				Rollback: func(tx *gorm.DB) error {
+					for _, col := range []string{"gateway_profiles", "gateway_policy_version", "gateway_fail_mode"} {
+						// SQLite does not support DROP COLUMN before 3.35.0 — ignore errors.
+						_ = tx.Exec("ALTER TABLE nodes DROP COLUMN " + col).Error
+					}
+					return nil
+				},
+			},
 		},
 	)
 
@@ -859,6 +928,15 @@ WHERE tags IS NOT NULL AND tags != '[]' AND tags != '' AND tags != 'null'
 			if err != nil {
 				return err
 			}
+		}
+
+		// vpngw/Horizon additions: exact SQL, never AutoMigrate (the gateway
+		// fields are tagged -:migration so GORM cannot create them wrongly).
+		if err := addGatewayColumns(tx); err != nil {
+			return err
+		}
+		if err := tx.Exec(sqlCreateAuditLog).Error; err != nil {
+			return fmt.Errorf("vpngw: create audit_log_entries: %w", err)
 		}
 
 		return nil

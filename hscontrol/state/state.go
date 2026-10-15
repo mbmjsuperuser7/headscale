@@ -111,6 +111,10 @@ var nodeUpdateColumns = []string{
 	"LastSeen",
 	"ApprovedRoutes",
 	"UpdatedAt",
+	// vpngw gateway policy columns
+	"GatewayProfiles",
+	"GatewayPolicyVersion",
+	"GatewayFailMode",
 }
 
 // ErrRegistrationExpired is returned when a registration has expired.
@@ -1083,6 +1087,31 @@ func (s *State) RenameNode(nodeID types.NodeID, newName string) (types.NodeView,
 	}
 
 	return s.persistNodeAndRefreshPolicy(view)
+}
+
+// UpdateGatewayPolicy sets the gateway profiles for a node tagged tag:gateway.
+// The new policy is persisted to the database and a MapResponse is pushed to
+// the node immediately via the returned change.Change.
+//
+// Increments GatewayPolicyVersion on every call so the agent can detect
+// missed updates from the ACK version field.
+func (s *State) UpdateGatewayPolicy(nodeID types.NodeID, profiles types.GatewayProfiles, failMode string) (types.NodeView, change.Change, error) {
+	view, exists := s.nodeStore.GetNode(nodeID)
+	if !exists || !view.Valid() {
+		return types.NodeView{}, change.Change{}, fmt.Errorf("%w: %d", ErrNodeNotInNodeStore, nodeID)
+	}
+
+	node := view.AsStruct()
+	node.GatewayProfiles = profiles
+	node.GatewayPolicyVersion++
+	node.GatewayFailMode = failMode
+
+	// Update the in-memory store first, then persist the stored view and refresh
+	// policy (v0.29.4 split persistNodeToDB into persistNode +
+	// persistNodeAndRefreshPolicy; the latter keeps the old contract).
+	stored := s.nodeStore.PutNode(*node)
+
+	return s.persistNodeAndRefreshPolicy(stored)
 }
 
 // BackfillNodeIPs assigns IP addresses to nodes that don't have them.

@@ -110,6 +110,11 @@ type Headscale struct {
 	mapBatcher     *mapper.Batcher
 
 	clientStreamsOpen sync.WaitGroup
+
+	// sessionLogger is the audit log implementation.
+	// Horizon: HorizonLogger — writes to DB, exports to SIEM.
+	// Glue:    GlueLogger   — documented no-op, zero writes.
+	sessionLogger types.SessionLogger
 }
 
 var (
@@ -138,11 +143,22 @@ func NewHeadscale(cfg *types.Config) (*Headscale, error) {
 		return nil, fmt.Errorf("init state: %w", err)
 	}
 
+	// Wire session logger based on product mode.
+	// This is the privacy boundary — Glue gets a documented no-op.
+	// Horizon gets the real DB-backed logger with SIEM webhook export.
+	var sessionLogger types.SessionLogger
+	if cfg.ProductMode.IsGlue() {
+		sessionLogger = types.NewGlueLogger()
+	} else {
+		sessionLogger = db.NewHorizonLoggerDB(s.DB().DB, cfg.AuditWebhookURL, "")
+	}
+
 	app := Headscale{
 		cfg:               cfg,
 		noisePrivateKey:   noisePrivateKey,
 		clientStreamsOpen: sync.WaitGroup{},
 		state:             s,
+		sessionLogger:     sessionLogger,
 	}
 
 	if len(cfg.TrustedProxies) > 0 {
@@ -587,6 +603,8 @@ func (h *Headscale) createRouter(grpcMux *grpcRuntime.ServeMux) *chi.Mux {
 	r.Route("/api", func(r chi.Router) {
 		r.Use(h.httpAuthenticationMiddleware)
 		r.HandleFunc("/v1/*", grpcMux.ServeHTTP)
+		// vpngw: gateway policy REST endpoint (no proto regeneration needed)
+		r.Put("/v1/vpngw/node/{nodeId}/gateway-policy", h.UpdateGatewayPolicyHandler)
 	})
 	// Ping response endpoint: receives HEAD from clients responding
 	// to a [tailcfg.PingRequest]. The unguessable ping ID serves as authentication.
