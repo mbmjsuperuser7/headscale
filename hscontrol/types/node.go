@@ -181,9 +181,9 @@ type Node struct {
 	// GatewayPolicy fields — populated for nodes tagged tag:gateway.
 	// Embedded in MapResponse.Node.CapMap under CapGatewayPolicy.
 	// Agent applies these as source-based policy routing rules.
-	GatewayProfiles      GatewayProfiles `gorm:"column:gateway_profiles;serializer:json"`
-	GatewayPolicyVersion uint64          `gorm:"column:gateway_policy_version;default:0"`
-	GatewayFailMode      string          `gorm:"column:gateway_fail_mode;default:'open'"`
+	GatewayProfiles      GatewayProfiles `gorm:"column:gateway_profiles;-:migration"`
+	GatewayPolicyVersion uint64          `gorm:"column:gateway_policy_version;default:0;-:migration"`
+	GatewayFailMode      string          `gorm:"column:gateway_fail_mode;default:'open';-:migration"`
 
 	// Unhealthy excludes the node from primary route election while
 	// online. Written by the HA prober. Runtime-only.

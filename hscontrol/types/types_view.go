@@ -276,7 +276,6 @@ func (v NodeView) GatewayFailMode() string          { return v.ж.GatewayFailMod
 
 // A compilation failure here means this code must be regenerated, with the command at the top of this file.
 
-
 // View returns a read-only view of PreAuthKey.
 func (p *PreAuthKey) View() PreAuthKeyView {
 	return PreAuthKeyView{ж: p}
