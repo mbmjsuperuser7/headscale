@@ -26,13 +26,12 @@ import (
 	"gorm.io/gorm/schema"
 )
 
-// vpngw/Horizon schema additions. Shared by the upgrade migrations and by
-// InitSchema (fresh databases), so both paths produce exactly schema.sql.
-const (
-	sqlAddGatewayProfiles      = `ALTER TABLE nodes ADD COLUMN gateway_profiles TEXT NOT NULL DEFAULT '[]'`
-	sqlAddGatewayPolicyVersion = `ALTER TABLE nodes ADD COLUMN gateway_policy_version INTEGER NOT NULL DEFAULT 0`
-	sqlAddGatewayFailMode      = `ALTER TABLE nodes ADD COLUMN gateway_fail_mode TEXT NOT NULL DEFAULT 'open'`
-	sqlCreateAuditLog          = `CREATE TABLE IF NOT EXISTS audit_log_entries(
+// vpngw/Horizon audit log (2026-10-17): one statement per entry, executed one at a time
+// (PostgreSQL's driver rejects several statements in one prepared call). The SQLite form is
+// unchanged from schema.sql; PostgreSQL has no AUTOINCREMENT or datetime, so it gets
+// bigserial / timestamptz / bigint with the same columns.
+var (
+	sqlAuditLogTableSQLite = `CREATE TABLE IF NOT EXISTS audit_log_entries(
   id integer PRIMARY KEY AUTOINCREMENT,
   created_at datetime,
   namespace text NOT NULL,
@@ -43,11 +42,47 @@ const (
   exit_node_id text,
   bytes_in integer,
   bytes_out integer
-);
-CREATE INDEX IF NOT EXISTS idx_audit_log_entries_created_at ON audit_log_entries(created_at);
-CREATE INDEX IF NOT EXISTS idx_audit_log_entries_namespace ON audit_log_entries(namespace);
-CREATE INDEX IF NOT EXISTS idx_audit_log_entries_node_id ON audit_log_entries(node_id);
-CREATE INDEX IF NOT EXISTS idx_audit_log_entries_event_type ON audit_log_entries(event_type);`
+)`
+	sqlAuditLogTablePostgres = `CREATE TABLE IF NOT EXISTS audit_log_entries(
+  id bigserial PRIMARY KEY,
+  created_at timestamptz,
+  namespace text NOT NULL,
+  node_id text,
+  node_name text,
+  event_type text NOT NULL,
+  src_ip text,
+  exit_node_id text,
+  bytes_in bigint,
+  bytes_out bigint
+)`
+	sqlAuditLogIndexes = []string{
+		`CREATE INDEX IF NOT EXISTS idx_audit_log_entries_created_at ON audit_log_entries(created_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_log_entries_namespace ON audit_log_entries(namespace)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_log_entries_node_id ON audit_log_entries(node_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_log_entries_event_type ON audit_log_entries(event_type)`,
+	}
+)
+
+// createAuditLog creates the Horizon audit table and its indexes for the connected dialect.
+func createAuditLog(tx *gorm.DB) error {
+	table := sqlAuditLogTableSQLite
+	if tx.Dialector.Name() == "postgres" {
+		table = sqlAuditLogTablePostgres
+	}
+	for _, stmt := range append([]string{table}, sqlAuditLogIndexes...) {
+		if err := tx.Exec(stmt).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// vpngw/Horizon schema additions. Shared by the upgrade migrations and by
+// InitSchema (fresh databases), so both paths produce exactly schema.sql.
+const (
+	sqlAddGatewayProfiles      = `ALTER TABLE nodes ADD COLUMN gateway_profiles TEXT NOT NULL DEFAULT '[]'`
+	sqlAddGatewayPolicyVersion = `ALTER TABLE nodes ADD COLUMN gateway_policy_version INTEGER NOT NULL DEFAULT 0`
+	sqlAddGatewayFailMode      = `ALTER TABLE nodes ADD COLUMN gateway_fail_mode TEXT NOT NULL DEFAULT 'open'`
 )
 
 // addGatewayColumns adds the vpngw gateway columns that are missing.
@@ -854,7 +889,7 @@ WHERE tags IS NOT NULL AND tags != '[]' AND tags != '' AND tags != 'null'
 				// Uses raw SQL to match schema.sql exactly (no backtick-quoted identifiers).
 				ID: "202606011201-horizon-audit-log",
 				Migrate: func(tx *gorm.DB) error {
-					return tx.Exec(sqlCreateAuditLog).Error
+					return createAuditLog(tx)
 				},
 				Rollback: func(tx *gorm.DB) error {
 					return tx.Exec("DROP TABLE IF EXISTS audit_log_entries").Error
@@ -935,7 +970,7 @@ WHERE tags IS NOT NULL AND tags != '[]' AND tags != '' AND tags != 'null'
 		if err := addGatewayColumns(tx); err != nil {
 			return err
 		}
-		if err := tx.Exec(sqlCreateAuditLog).Error; err != nil {
+		if err := createAuditLog(tx); err != nil {
 			return fmt.Errorf("vpngw: create audit_log_entries: %w", err)
 		}
 
